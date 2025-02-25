@@ -1,9 +1,9 @@
 import os
-os.environ["OMP_NUM_THREADS"] = "20"
-os.environ["OPENBLAS_NUM_THREADS"] = "20"
-os.environ["MKL_NUM_THREADS"] = "20"
-os.environ["VECLIB_MAXIMUM_THREADS"] = "20"
-os.environ["NUMEXPR_NUM_THREADS"] = "20"
+os.environ["OMP_NUM_THREADS"] = "10"
+os.environ["OPENBLAS_NUM_THREADS"] = "10"
+os.environ["MKL_NUM_THREADS"] = "10"
+os.environ["VECLIB_MAXIMUM_THREADS"] = "10"
+os.environ["NUMEXPR_NUM_THREADS"] = "10"
 import scipy.optimize as op
 import random
 from scipy.stats import gmean
@@ -17,6 +17,7 @@ from scipy.stats import erlang
 import numpy as np
 import mpmath
 import sys
+import copy
 
 sys.path.append("..")
 sys.path.append(
@@ -24,7 +25,6 @@ sys.path.append(
 )
 from src.PopulationDynamicsModel import *
 
-#3D上で六角形上に点を配置する by GPT-4
 def generate_hex_grid_4d(range_limit):
     """
     x + y + z + w = 0 を満たす整数点を生成する関数
@@ -66,36 +66,51 @@ def get_neighbors_4d(points):
                 neighbor_idx = points[neighbor]
                 neighbors.append((idx, neighbor_idx))
     return neighbors
+#k近傍, n: 点の数, k: 半径kマス以内の点のリスト, neighbors: 隣接リスト
+def adj_k(n,k,neighbors):
+    adjL = [[i] for i in range(n)]
+    for pair in neighbors:
+        x,y = pair
+        adjL[x].append(y)
+    if k == 1:
+        return adjL
+    next = copy.deepcopy(adjL)
+    for i in range(k-1):
+        tmp = [[] for i in range(n)]
+        for j in range(n):
+            for x in adjL[j]:
+                for y in next[x]:
+                    tmp[j].append(y)
+            tmp[j] = list(set(tmp[j]))
+        adjL = copy.deepcopy(tmp)
+    return adjL
 
-hex_grid = generate_hex_grid_4d(20)
-print(len(hex_grid))
+hex_grid = generate_hex_grid_4d(18)
 neighbors = get_neighbors_4d(hex_grid)
-print(len(neighbors))
+points = list(hex_grid)
 
 a = 0.01
 b = 1
-n = len(hex_grid)
+n = len(points)
 E = 4
 p = 10**(-5)
 A = np.zeros((n,n))
-v = np.zeros((n,E))
+for pair in neighbors:
+    x,y = pair
+    A[x,y] = p
+    A[y,x] = p
 for i in range(n):
-    A[i,i] = 1
-for i,j in neighbors:
-    A[i,j] = p
-    A[i,i] -= p
-points = list(hex_grid)
-print(A.dtype)
+    A[i,i] = 1 - sum(A[i,:])
+mu = np.zeros((n,E))
+
 for i in range(n):
     x,y,z,w = points[i]
-    v[i] = np.array([2**(x/4),2**(y/4),2**(z/4),2**(w/4)])*(0.5)
-gamma = a*np.exp(b*v)
+    mu[i] = np.array([2**(x/3),2**(y/3),2**(z/3),2**(w/3)])*(0.2)
+gamma = a*np.exp(b*mu)
 X_0 = np.zeros(n)
 X_0[n//2] = 1
-S_0 = 1
+
 env_change_num = 20000
-tauList = np.full(env_change_num,50)
-
-
-_,_,N_mean,_ = Simulation(n, E, v, gamma, A, X_0,S_0, tauList, env_change_num, 10**(-8))
+tauList = np.full(10,env_change_num)
+_,_,N_mean,_ = Simulation_approx(n, E, mu, gamma, A, X_0, 1, tauList, env_change_num,adj_k(n,1,neighbors),threshold=10**(-8))
     
