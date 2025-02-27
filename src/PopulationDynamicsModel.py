@@ -92,3 +92,77 @@ def Simulation(n, E, v, gamma, A, N_0, S0, tauList, env_change_num,threshold = 1
     t_course = np.array(t_course)
     N_mean = np.array(N_mean)
     return N_course,t_course,N_mean,tau_course
+
+#近似シミュレーション, 種数が増えてくると固有値計算ができないので
+def Simulation_approx(n, E, v, gamma, A, N_0, S0, tauList, env_change_num,neighbors,threshold = 10**(-5)):
+    """
+    - n: 表現型数
+    - v: 成長速度(n*Eのサイズの行列)
+    - mu: 死亡速度(n*Eのサイズの行列)
+    - A: 遷移行列
+    - E: 環境数
+    - N0: 初期個体数(サイズnのベクトル)
+    - S0: 栄養量
+    - tau 環境持続時間
+    - env_change_num 環境が切り替わる回数
+    - neighbors 隣接行列
+    - threshold 個体数を0にする閾値
+    """
+    N_course = [N_0]
+    t_course = [0]
+    N = np.copy(N_0) #initial population
+    N_mean = []
+    tau_course = []
+    env_course = []
+    total_time = 0
+    
+    env = 0
+    for i in range(env_change_num):
+        tau = tauList[i]
+        env = random.randint(0, E-1)
+
+        env_course.append(env)
+        tau_course.append(tau)
+        
+        preNindex = np.where(N>threshold)[0] #個体数が0でない表現型のindex
+        adjL = [] #それに隣接する表現型のindexをとってくる
+        for idx in preNindex:
+            adjL.append(idx)
+            for k in neighbors[idx]:
+                adjL.append(k)
+        Nindex = list(set(adjL))
+
+        Np = N[Nindex]
+        Ap = A[Nindex][:,Nindex]
+        vp = v[Nindex][:,env]
+        gammap = gamma[Nindex][:,env]
+        Avp = (Ap.T)@np.diag(vp)
+        eig = np.linalg.eig(Avp)
+        L = eig[0]
+        U = eig[1]
+        P0 = np.linalg.solve(U,Np)
+        tt = interval(tau,S0,vp,U,P0,L)
+        if S_cons(tt,S0,vp,U,P0,L) <= 0:
+            t_p = op.brentq(S_cons,0,tt,args=(S0,vp,U,P0,L))
+        else:
+            t_p = tau
+        
+        #成長
+        Np = U @ (P0*np.exp(L*t_p)) #N(t_p)
+        Np = np.where(Np<threshold,0,Np)
+        N[Nindex] = np.copy(Np)
+        #死亡
+        Np = Np * np.exp(-gammap*(tau-t_p))
+        
+        #t_course.append(tau + total_time)
+        total_time += tau
+        Np = np.where(Np<threshold,0,Np)
+        N[Nindex] = np.copy(Np)
+
+        N_meanp = N_average(U,P0,L,t_p,gammap,tau)
+        Nm = np.zeros(n)
+        Nm[Nindex] = N_meanp
+        N_mean.append(np.copy(Nm))
+
+    N_mean = np.array(N_mean)
+    return N_course,t_course,N_mean,tau_course
