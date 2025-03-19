@@ -27,25 +27,20 @@ from src.PopulationDynamicsModel import *
 
 def generate_hex_grid_4d(range_limit):
     """
-    x + y + z + w = 0 を満たす整数点を生成する関数
-    range_limit : 各座標の範囲
+    generate lattice point (x,y,z,w), x + y + z + w = 0
+    range_limit : range of each axis
     """
     points = {}
     idx = 0
     for x in range(-range_limit, range_limit + 1):
         for y in range(-range_limit, range_limit + 1):
             for z in range(-range_limit, range_limit + 1):
-                # wを計算
                 w = - (x + y + z)
-                # wが範囲内であればポイントを追加
                 if -range_limit <= w <= range_limit:
                     points[(x, y, z, w)] = idx
                     idx += 1
     return points
 def get_directions_4d():
-    """
-    4次元空間での方向を返す関数
-    """
     directions = []
     for dx in [-1, 0, 1]:
         for dy in [-1, 0, 1]:
@@ -57,7 +52,6 @@ def get_directions_4d():
 def get_neighbors_4d(points):
     point_set = set(points)
     neighbors = []
-                # x, y, z, w方向の隣接点
     for idx, (x, y, z, w) in enumerate(points):
         directions = get_directions_4d()
         for dx, dy, dz, dw in directions:
@@ -66,8 +60,12 @@ def get_neighbors_4d(points):
                 neighbor_idx = points[neighbor]
                 neighbors.append((idx, neighbor_idx))
     return neighbors
-#k近傍, n: 点の数, k: 半径kマス以内の点のリスト, neighbors: 隣接リスト
 def adj_k(n,k,neighbors):
+    """ Returns a list of k-nearest neighbors
+    n: number of points
+    k: k-nearest neighbors
+    neighbors: list of neighbors
+    """
     adjL = [[i] for i in range(n)]
     for pair in neighbors:
         x,y = pair
